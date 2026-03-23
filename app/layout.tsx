@@ -3,10 +3,10 @@ import "./globals.css";
 import ClientLayout from "@/components/ClientLayout";
 
 export const metadata: Metadata = {
-  title: "USeP Poultry — Egg Counter",
+  title: "EggSentry — USeP Poultry",
   description:
-    "Track and analyze egg production data across your poultry cages. View daily counts, size distributions, and production analytics.",
-  keywords: ["egg counter", "poultry", "USeP", "egg production", "agriculture"],
+    "Egg Counter with Tracking System. Track and analyze egg production data across your poultry cages.",
+  keywords: ["EggSentry", "egg counter", "poultry", "USeP", "egg production", "agriculture"],
 };
 
 export default function RootLayout({
