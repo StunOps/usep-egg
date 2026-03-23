@@ -8,16 +8,24 @@ import {
   Camera,
   EggRecord,
 } from "@/lib/storage";
-import { countBySize, countByDate, getTodayStr } from "@/lib/utils";
+import {
+  countBySize,
+  countByDate,
+  getTodayStr,
+  getDateNDaysAgo,
+  formatShortDate,
+} from "@/lib/utils";
 import StatsCard from "@/components/StatsCard";
-import CameraCard from "@/components/CameraCard";
 import ProductionChart from "@/components/charts/ProductionChart";
-import { Egg, TrendingUp, BarChart3, Award } from "lucide-react";
+import SizeDistChart from "@/components/charts/SizeDistChart";
+import DateCompChart from "@/components/charts/DateCompChart";
+import { Egg, TrendingUp, BarChart3, CalendarDays, Camera as CamIcon } from "lucide-react";
 
 export default function DashboardPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [eggs, setEggs] = useState<EggRecord[]>([]);
   const [mounted, setMounted] = useState(false);
+  const [range, setRange] = useState<7 | 30 | 90>(30);
 
   useEffect(() => {
     seedSampleData();
@@ -28,19 +36,19 @@ export default function DashboardPage() {
 
   const today = useMemo(() => getTodayStr(), []);
   const todayEggs = useMemo(() => eggs.filter((e) => e.date === today), [eggs, today]);
-  const sizeCounts = useMemo(() => countBySize(eggs), [eggs]);
-  const last7 = useMemo(() => countByDate(eggs).slice(-7), [eggs]);
 
-  // Most productive camera
-  const bestCamLabel = useMemo(() => {
-    const camCounts = new Map<string, number>();
-    eggs.forEach((e) => {
-      camCounts.set(e.cameraId, (camCounts.get(e.cameraId) || 0) + 1);
-    });
-    const best = Array.from(camCounts.entries()).sort((a, b) => b[1] - a[1])[0];
-    if (!best) return "—";
-    return `Camera ${cameras.find((c) => c.id === best[0])?.cameraNumber ?? "?"}`;
-  }, [eggs, cameras]);
+  // Filter eggs by selected range
+  const startDate = useMemo(() => getDateNDaysAgo(range), [range]);
+  const rangeEggs = useMemo(() => eggs.filter((e) => e.date >= startDate), [eggs, startDate]);
+
+  const sizeCounts = useMemo(() => countBySize(rangeEggs), [rangeEggs]);
+  const dailyCounts = useMemo(() => countByDate(rangeEggs), [rangeEggs]);
+
+  // Best day
+  const bestDay = useMemo(() => {
+    if (dailyCounts.length === 0) return null;
+    return dailyCounts.reduce((best, d) => (d.count > best.count ? d : best), dailyCounts[0]);
+  }, [dailyCounts]);
 
   // Dominant size
   const dominantSize = useMemo(
@@ -48,14 +56,15 @@ export default function DashboardPage() {
     [sizeCounts]
   );
 
-  // Pre-compute per-camera size counts (avoids localStorage reads inside CameraCard)
-  const perCameraSizeCounts = useMemo(() => {
-    const map: Record<string, ReturnType<typeof countBySize>> = {};
-    cameras.forEach((cam) => {
-      map[cam.id] = countBySize(eggs.filter((e) => e.cameraId === cam.id));
-    });
-    return map;
-  }, [eggs, cameras]);
+  // Avg per day
+  const daysWithData = useMemo(() => new Set(rangeEggs.map((e) => e.date)).size, [rangeEggs]);
+  const avgPerDay = useMemo(
+    () => (daysWithData > 0 ? (rangeEggs.length / daysWithData).toFixed(1) : "0"),
+    [rangeEggs, daysWithData]
+  );
+
+  // Camera info
+  const camera = cameras.length > 0 ? cameras[0] : null;
 
   if (!mounted) {
     return (
@@ -68,12 +77,59 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="mb-8">
-        <h1 className="page-title">Dashboard</h1>
-        <p className="page-subtitle">
-          Overview of today&apos;s egg production and recent trends
-        </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
+        <div>
+          <h1 className="page-title">Dashboard</h1>
+          <p className="page-subtitle">
+            Egg production overview and analytics
+          </p>
+        </div>
+        {/* Range Toggle */}
+        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
+          {([7, 30, 90] as const).map((r) => (
+            <button
+              key={r}
+              onClick={() => setRange(r)}
+              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
+                range === r
+                  ? "bg-white text-primary-600 shadow-sm"
+                  : "text-slate-500 hover:text-slate-700"
+              }`}
+            >
+              {r}d
+            </button>
+          ))}
+        </div>
       </div>
+
+      {/* Camera Info Bar */}
+      {camera && (
+        <div className="card mb-6 animate-fade-in-up flex flex-wrap items-center gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-primary-50 flex items-center justify-center text-primary-600">
+              <CamIcon className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="font-semibold text-slate-900">Camera 1</h3>
+              <p className="text-xs text-slate-400">{camera.label}</p>
+            </div>
+          </div>
+          <div className="flex gap-6 ml-auto">
+            <div className="text-center">
+              <p className="text-xs text-slate-400 font-medium">Cages</p>
+              <p className="text-xl font-bold text-slate-900">{camera.cageCount}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-400 font-medium">Chickens</p>
+              <p className="text-xl font-bold text-slate-900">{camera.chickenCount}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-slate-400 font-medium">Today</p>
+              <p className="text-xl font-bold text-primary-600">{todayEggs.length}</p>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
@@ -84,54 +140,39 @@ export default function DashboardPage() {
           className="animate-fade-in-up stagger-1"
         />
         <StatsCard
-          label="Total Eggs (30d)"
-          value={eggs.length}
+          label={`Total (${range}d)`}
+          value={rangeEggs.length}
           icon={<TrendingUp className="w-5 h-5" />}
           className="animate-fade-in-up stagger-2"
         />
         <StatsCard
-          label="Most Productive"
-          value={bestCamLabel}
-          icon={<Award className="w-5 h-5" />}
+          label="Best Day"
+          value={bestDay ? `${formatShortDate(bestDay.date)} (${bestDay.count})` : "—"}
+          icon={<CalendarDays className="w-5 h-5" />}
           className="animate-fade-in-up stagger-3"
         />
         <StatsCard
-          label="Dominant Size"
-          value={dominantSize ? `${dominantSize[0]} (${dominantSize[1]})` : "—"}
+          label="Avg / Day"
+          value={avgPerDay}
           icon={<BarChart3 className="w-5 h-5" />}
           className="animate-fade-in-up stagger-4"
         />
       </div>
 
-      {/* Camera Cards */}
-      <div className="mb-8">
-        <h2 className="text-lg font-semibold text-slate-900 mb-4">Cameras</h2>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-          {cameras.map((cam, i) => {
-            const camTodayEggs = todayEggs.filter((e) => e.cameraId === cam.id).length;
-            return (
-              <CameraCard
-                key={cam.id}
-                camera={cam}
-                todayEggs={camTodayEggs}
-                sizeCounts={perCameraSizeCounts[cam.id] || countBySize([])}
-                className={`animate-fade-in-up stagger-${i + 1}`}
-              />
-            );
-          })}
-          {cameras.length === 0 && (
-            <div className="card text-center py-12 col-span-full">
-              <p className="text-slate-400 text-lg">No cameras configured</p>
-              <p className="text-sm text-slate-300 mt-1">
-                Go to the <span className="font-medium text-primary-500">Cameras</span> page to add one
-              </p>
-            </div>
-          )}
+      {/* Charts Row */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+        <div className="animate-fade-in-up stagger-1">
+          <ProductionChart data={dailyCounts} />
+        </div>
+        <div className="animate-fade-in-up stagger-2">
+          <SizeDistChart data={sizeCounts} />
         </div>
       </div>
 
-      {/* Mini Chart */}
-      <ProductionChart data={last7} />
+      {/* Date Comparison */}
+      <div className="animate-fade-in-up stagger-3">
+        <DateCompChart eggs={rangeEggs} />
+      </div>
     </div>
   );
 }

@@ -99,22 +99,14 @@ export function hasData(): boolean {
 export function seedSampleData(): void {
   if (hasData()) return;
 
-  // Create sample cameras
+  // Create single camera
   const cameras: Camera[] = [
     {
       id: "cam1",
       cameraNumber: 1,
-      label: "Coop A - Layer Section",
+      label: "Main Coop — Layer Section",
       cageCount: 4,
       chickenCount: 4,
-      createdAt: "2026-03-01T08:00:00Z",
-    },
-    {
-      id: "cam2",
-      cameraNumber: 2,
-      label: "Coop B - Broiler Section",
-      cageCount: 3,
-      chickenCount: 3,
       createdAt: "2026-03-01T08:00:00Z",
     },
   ];

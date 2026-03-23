@@ -5,10 +5,9 @@ import { formatDate, sizeBadgeClass } from "@/lib/utils";
 
 interface EggTableProps {
   eggs: EggRecord[];
-  cameraMap: Record<string, string>;
 }
 
-export default function EggTable({ eggs, cameraMap }: EggTableProps) {
+export default function EggTable({ eggs }: EggTableProps) {
   if (eggs.length === 0) {
     return (
       <div className="card text-center py-12">
@@ -25,7 +24,6 @@ export default function EggTable({ eggs, cameraMap }: EggTableProps) {
           <thead>
             <tr className="border-b border-gray-100 bg-gray-50/50">
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Date</th>
-              <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Camera</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Size</th>
               <th className="text-left text-xs font-semibold text-slate-500 uppercase tracking-wider px-6 py-3">Date & Time</th>
             </tr>
@@ -39,9 +37,6 @@ export default function EggTable({ eggs, cameraMap }: EggTableProps) {
                 }`}
               >
                 <td className="px-6 py-3 text-sm text-slate-700 font-medium">{formatDate(egg.date)}</td>
-                <td className="px-6 py-3 text-sm text-slate-600">
-                  {cameraMap[egg.cameraId] || "Unknown"}
-                </td>
                 <td className="px-6 py-3">
                   <span className={`badge ${sizeBadgeClass(egg.size)}`}>{egg.size}</span>
                 </td>

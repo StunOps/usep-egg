@@ -2,10 +2,8 @@
 
 import { useEffect, useState, useMemo } from "react";
 import {
-  getCameras,
   getEggs,
   seedSampleData,
-  Camera,
   EggRecord,
   EggSize,
 } from "@/lib/storage";
@@ -15,37 +13,23 @@ import { Filter } from "lucide-react";
 const EGG_SIZES: EggSize[] = ["S", "M", "L", "XL", "Jumbo"];
 
 export default function HistoryPage() {
-  const [cameras, setCameras] = useState<Camera[]>([]);
   const [eggs, setEggs] = useState<EggRecord[]>([]);
   const [mounted, setMounted] = useState(false);
 
   // Filters
-  const [selectedCamera, setSelectedCamera] = useState<string>("all");
   const [selectedSize, setSelectedSize] = useState<string>("all");
   const [startDate, setStartDate] = useState("");
   const [endDate, setEndDate] = useState("");
 
   useEffect(() => {
     seedSampleData();
-    setCameras(getCameras());
     setEggs(getEggs());
     setMounted(true);
   }, []);
 
-  const cameraMap = useMemo(() => {
-    const map: Record<string, string> = {};
-    cameras.forEach((c) => {
-      map[c.id] = `Camera ${c.cameraNumber}`;
-    });
-    return map;
-  }, [cameras]);
-
   const filteredEggs = useMemo(() => {
     let result = [...eggs];
 
-    if (selectedCamera !== "all") {
-      result = result.filter((e) => e.cameraId === selectedCamera);
-    }
     if (selectedSize !== "all") {
       result = result.filter((e) => e.size === selectedSize);
     }
@@ -57,7 +41,7 @@ export default function HistoryPage() {
     }
 
     return result.sort((a, b) => b.date.localeCompare(a.date) || b.timestamp.localeCompare(a.timestamp));
-  }, [eggs, selectedCamera, selectedSize, startDate, endDate]);
+  }, [eggs, selectedSize, startDate, endDate]);
 
   if (!mounted) {
     return (
@@ -84,22 +68,7 @@ export default function HistoryPage() {
             {filteredEggs.length} records
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
-          <div>
-            <label className="text-xs font-medium text-slate-500 block mb-1">Camera</label>
-            <select
-              value={selectedCamera}
-              onChange={(e) => setSelectedCamera(e.target.value)}
-              className="select-field text-sm"
-            >
-              <option value="all">All Cameras</option>
-              {cameras.map((c) => (
-                <option key={c.id} value={c.id}>
-                  Camera {c.cameraNumber}
-                </option>
-              ))}
-            </select>
-          </div>
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <label className="text-xs font-medium text-slate-500 block mb-1">Size</label>
             <select
@@ -138,7 +107,7 @@ export default function HistoryPage() {
 
       {/* Table */}
       <div className="animate-fade-in-up stagger-2">
-        <EggTable eggs={filteredEggs} cameraMap={cameraMap} />
+        <EggTable eggs={filteredEggs} />
       </div>
     </div>
   );

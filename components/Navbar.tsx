@@ -2,17 +2,19 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { Egg, Camera, BarChart3, History, Menu, X } from "lucide-react";
+import { Egg, History, Menu, X, Settings } from "lucide-react";
 import { useState } from "react";
 
 const navLinks = [
   { href: "/", label: "Dashboard", icon: Egg },
-  { href: "/cameras", label: "Cameras", icon: Camera },
   { href: "/history", label: "History", icon: History },
-  { href: "/analytics", label: "Analytics", icon: BarChart3 },
 ];
 
-export default function Navbar() {
+interface NavbarProps {
+  onModifyCamera?: () => void;
+}
+
+export default function Navbar({ onModifyCamera }: NavbarProps) {
   const pathname = usePathname();
   const [mobileOpen, setMobileOpen] = useState(false);
 
@@ -55,6 +57,15 @@ export default function Navbar() {
                 </Link>
               );
             })}
+            {onModifyCamera && (
+              <button
+                onClick={onModifyCamera}
+                className="flex items-center gap-2 px-4 py-2 rounded-xl text-sm font-medium text-slate-500 hover:text-slate-800 hover:bg-gray-50 transition-all duration-200"
+              >
+                <Settings className="w-4 h-4" />
+                Modify Camera
+              </button>
+            )}
           </div>
 
           {/* Mobile Toggle */}
@@ -89,6 +100,18 @@ export default function Navbar() {
               </Link>
             );
           })}
+          {onModifyCamera && (
+            <button
+              onClick={() => {
+                setMobileOpen(false);
+                onModifyCamera();
+              }}
+              className="flex items-center gap-3 px-4 py-3 rounded-xl text-sm font-medium text-slate-500 hover:text-slate-800 hover:bg-gray-50 transition-all mt-1 w-full"
+            >
+              <Settings className="w-4 h-4" />
+              Modify Camera
+            </button>
+          )}
         </div>
       )}
     </nav>
