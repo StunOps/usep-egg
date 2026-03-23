@@ -12,20 +12,92 @@ import {
   countBySize,
   countByDate,
   getTodayStr,
-  getDateNDaysAgo,
   formatShortDate,
 } from "@/lib/utils";
 import StatsCard from "@/components/StatsCard";
 import ProductionChart from "@/components/charts/ProductionChart";
 import SizeDistChart from "@/components/charts/SizeDistChart";
-import DateCompChart from "@/components/charts/DateCompChart";
-import { Egg, TrendingUp, BarChart3, CalendarDays, Camera as CamIcon } from "lucide-react";
+import { Egg, TrendingUp, BarChart3, CalendarDays, Camera as CamIcon, CalendarRange, CalendarClock, CalendarCheck } from "lucide-react";
+
+// --- Helpers ---
+
+const MONTH_NAMES = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+
+function getWeeksInMonth(year: number, month: number): { label: string; start: string; end: string }[] {
+  const weeks: { label: string; start: string; end: string }[] = [];
+  const daysInMonth = new Date(year, month + 1, 0).getDate();
+  let weekStart = 1;
+  let weekNum = 1;
+
+  while (weekStart <= daysInMonth) {
+    const weekEnd = Math.min(weekStart + 6, daysInMonth);
+    const startStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(weekStart).padStart(2, "0")}`;
+    const endStr = `${year}-${String(month + 1).padStart(2, "0")}-${String(weekEnd).padStart(2, "0")}`;
+    weeks.push({ label: `Week ${weekNum} (${weekStart}-${weekEnd})`, start: startStr, end: endStr });
+    weekStart = weekEnd + 1;
+    weekNum++;
+  }
+  return weeks;
+}
+
+function getAvailableYears(): number[] {
+  const current = new Date().getFullYear();
+  const years: number[] = [];
+  for (let y = current; y >= current - 5; y--) years.push(y);
+  return years;
+}
+
+function getAvailableMonths(year: number): number[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const months: number[] = [];
+  const maxMonth = year === currentYear ? currentMonth : 11;
+  for (let m = 0; m <= maxMonth; m++) months.push(m);
+  return months;
+}
+
+function getAvailableWeeks(year: number, month: number): { label: string; start: string; end: string }[] {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+  const today = now.getDate();
+  const allWeeks = getWeeksInMonth(year, month);
+
+  if (year === currentYear && month === currentMonth) {
+    return allWeeks.filter((w) => {
+      const startDay = parseInt(w.start.split("-")[2]);
+      return startDay <= today;
+    });
+  }
+  return allWeeks;
+}
+
+// --- Component ---
 
 export default function DashboardPage() {
   const [cameras, setCameras] = useState<Camera[]>([]);
   const [eggs, setEggs] = useState<EggRecord[]>([]);
   const [mounted, setMounted] = useState(false);
-  const [range, setRange] = useState<7 | 30 | 90>(30);
+
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  // Week filter state
+  const [weekYear, setWeekYear] = useState(currentYear);
+  const [weekMonth, setWeekMonth] = useState(currentMonth);
+  const [weekIndex, setWeekIndex] = useState(0);
+
+  // Month filter state
+  const [monthYear, setMonthYear] = useState(currentYear);
+  const [selectedMonth, setSelectedMonth] = useState(currentMonth);
+
+  // Year filter state
+  const [selectedYear, setSelectedYear] = useState(currentYear);
 
   useEffect(() => {
     seedSampleData();
@@ -34,36 +106,71 @@ export default function DashboardPage() {
     setMounted(true);
   }, []);
 
+  // Set initial week to the latest available
+  const availableWeeks = useMemo(() => getAvailableWeeks(weekYear, weekMonth), [weekYear, weekMonth]);
+  useEffect(() => {
+    setWeekIndex(Math.max(availableWeeks.length - 1, 0));
+  }, [availableWeeks]);
+
+  // Adjust month when year changes
+  useEffect(() => {
+    const months = getAvailableMonths(monthYear);
+    if (!months.includes(selectedMonth)) {
+      setSelectedMonth(months[months.length - 1]);
+    }
+  }, [monthYear, selectedMonth]);
+
   const today = useMemo(() => getTodayStr(), []);
   const todayEggs = useMemo(() => eggs.filter((e) => e.date === today), [eggs, today]);
 
-  // Filter eggs by selected range
-  const startDate = useMemo(() => getDateNDaysAgo(range), [range]);
-  const rangeEggs = useMemo(() => eggs.filter((e) => e.date >= startDate), [eggs, startDate]);
+  // Weekly summary
+  const weeklySummary = useMemo(() => {
+    const week = availableWeeks[weekIndex];
+    if (!week) return { total: 0, avg: "0" };
+    const weekEggs = eggs.filter((e) => e.date >= week.start && e.date <= week.end);
+    const days = new Set(weekEggs.map((e) => e.date)).size;
+    return { total: weekEggs.length, avg: days > 0 ? (weekEggs.length / days).toFixed(1) : "0" };
+  }, [eggs, availableWeeks, weekIndex]);
 
-  const sizeCounts = useMemo(() => countBySize(rangeEggs), [rangeEggs]);
-  const dailyCounts = useMemo(() => countByDate(rangeEggs), [rangeEggs]);
+  // Monthly summary
+  const monthlySummary = useMemo(() => {
+    const monthStr = `${monthYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+    const monthEggs = eggs.filter((e) => e.date.startsWith(monthStr));
+    const days = new Set(monthEggs.map((e) => e.date)).size;
+    return { total: monthEggs.length, avg: days > 0 ? (monthEggs.length / days).toFixed(1) : "0" };
+  }, [eggs, monthYear, selectedMonth]);
 
-  // Best day
+  // Yearly summary
+  const yearlySummary = useMemo(() => {
+    const yearStr = `${selectedYear}-`;
+    const yearEggs = eggs.filter((e) => e.date.startsWith(yearStr));
+    const days = new Set(yearEggs.map((e) => e.date)).size;
+    return { total: yearEggs.length, avg: days > 0 ? (yearEggs.length / days).toFixed(1) : "0" };
+  }, [eggs, selectedYear]);
+
+  // Charts & stats based on current month
+  const chartEggs = useMemo(() => {
+    const monthStr = `${monthYear}-${String(selectedMonth + 1).padStart(2, "0")}`;
+    return eggs.filter((e) => e.date.startsWith(monthStr));
+  }, [eggs, monthYear, selectedMonth]);
+
+  const sizeCounts = useMemo(() => countBySize(chartEggs), [chartEggs]);
+  const dailyCounts = useMemo(() => countByDate(chartEggs), [chartEggs]);
+
+  // Best day (all time)
+  const allDailyCounts = useMemo(() => countByDate(eggs), [eggs]);
   const bestDay = useMemo(() => {
-    if (dailyCounts.length === 0) return null;
-    return dailyCounts.reduce((best, d) => (d.count > best.count ? d : best), dailyCounts[0]);
-  }, [dailyCounts]);
+    if (allDailyCounts.length === 0) return null;
+    return allDailyCounts.reduce((best, d) => (d.count > best.count ? d : best), allDailyCounts[0]);
+  }, [allDailyCounts]);
 
-  // Dominant size
+  // Dominant size (all time)
+  const allSizeCounts = useMemo(() => countBySize(eggs), [eggs]);
   const dominantSize = useMemo(
-    () => Object.entries(sizeCounts).sort((a, b) => b[1] - a[1])[0],
-    [sizeCounts]
+    () => Object.entries(allSizeCounts).sort((a, b) => b[1] - a[1])[0],
+    [allSizeCounts]
   );
 
-  // Avg per day
-  const daysWithData = useMemo(() => new Set(rangeEggs.map((e) => e.date)).size, [rangeEggs]);
-  const avgPerDay = useMemo(
-    () => (daysWithData > 0 ? (rangeEggs.length / daysWithData).toFixed(1) : "0"),
-    [rangeEggs, daysWithData]
-  );
-
-  // Camera info
   const camera = cameras.length > 0 ? cameras[0] : null;
 
   if (!mounted) {
@@ -77,29 +184,9 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-8">
-        <div>
-          <h1 className="page-title">Dashboard</h1>
-          <p className="page-subtitle">
-            Egg production overview and analytics
-          </p>
-        </div>
-        {/* Range Toggle */}
-        <div className="flex gap-1 bg-gray-100 rounded-xl p-1">
-          {([7, 30, 90] as const).map((r) => (
-            <button
-              key={r}
-              onClick={() => setRange(r)}
-              className={`px-4 py-1.5 rounded-lg text-sm font-medium transition-all ${
-                range === r
-                  ? "bg-white text-primary-600 shadow-sm"
-                  : "text-slate-500 hover:text-slate-700"
-              }`}
-            >
-              {r}d
-            </button>
-          ))}
-        </div>
+      <div className="mb-8">
+        <h1 className="page-title">Dashboard</h1>
+        <p className="page-subtitle">Egg production overview and analytics</p>
       </div>
 
       {/* Camera Info Bar */}
@@ -131,6 +218,123 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Summary: Weekly / Monthly / Yearly */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+        {/* Weekly */}
+        <div className="card animate-fade-in-up stagger-1">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-blue-50 flex items-center justify-center text-blue-500">
+              <CalendarRange className="w-4 h-4" />
+            </div>
+            <h3 className="font-semibold text-slate-700 text-sm">Weekly</h3>
+          </div>
+          {/* Week selectors */}
+          <div className="flex gap-2 mb-3">
+            <select
+              value={weekMonth}
+              onChange={(e) => setWeekMonth(parseInt(e.target.value))}
+              className="select-field text-xs py-1.5 px-2"
+            >
+              {getAvailableMonths(weekYear).map((m) => (
+                <option key={m} value={m}>{MONTH_NAMES[m].slice(0, 3)}</option>
+              ))}
+            </select>
+            <select
+              value={weekIndex}
+              onChange={(e) => setWeekIndex(parseInt(e.target.value))}
+              className="select-field text-xs py-1.5 px-2"
+            >
+              {availableWeeks.map((w, i) => (
+                <option key={i} value={i}>{w.label}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-3xl font-bold text-slate-900">{weeklySummary.total}</p>
+              <p className="text-xs text-slate-400 mt-0.5">total eggs</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-blue-600">{weeklySummary.avg}</p>
+              <p className="text-xs text-slate-400">avg/day</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Monthly */}
+        <div className="card animate-fade-in-up stagger-2">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-green-50 flex items-center justify-center text-green-500">
+              <CalendarClock className="w-4 h-4" />
+            </div>
+            <h3 className="font-semibold text-slate-700 text-sm">Monthly</h3>
+          </div>
+          {/* Month selectors */}
+          <div className="flex gap-2 mb-3">
+            <select
+              value={selectedMonth}
+              onChange={(e) => setSelectedMonth(parseInt(e.target.value))}
+              className="select-field text-xs py-1.5 px-2"
+            >
+              {getAvailableMonths(monthYear).map((m) => (
+                <option key={m} value={m}>{MONTH_NAMES[m]}</option>
+              ))}
+            </select>
+            <select
+              value={monthYear}
+              onChange={(e) => setMonthYear(parseInt(e.target.value))}
+              className="select-field text-xs py-1.5 px-2 w-20"
+            >
+              {getAvailableYears().map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-3xl font-bold text-slate-900">{monthlySummary.total}</p>
+              <p className="text-xs text-slate-400 mt-0.5">total eggs</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-green-600">{monthlySummary.avg}</p>
+              <p className="text-xs text-slate-400">avg/day</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Yearly */}
+        <div className="card animate-fade-in-up stagger-3">
+          <div className="flex items-center gap-3 mb-3">
+            <div className="w-9 h-9 rounded-xl bg-purple-50 flex items-center justify-center text-purple-500">
+              <CalendarCheck className="w-4 h-4" />
+            </div>
+            <h3 className="font-semibold text-slate-700 text-sm">Yearly</h3>
+          </div>
+          {/* Year selector */}
+          <div className="mb-3">
+            <select
+              value={selectedYear}
+              onChange={(e) => setSelectedYear(parseInt(e.target.value))}
+              className="select-field text-xs py-1.5 px-2 w-24"
+            >
+              {getAvailableYears().map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+          </div>
+          <div className="flex items-end justify-between">
+            <div>
+              <p className="text-3xl font-bold text-slate-900">{yearlySummary.total}</p>
+              <p className="text-xs text-slate-400 mt-0.5">total eggs</p>
+            </div>
+            <div className="text-right">
+              <p className="text-lg font-bold text-purple-600">{yearlySummary.avg}</p>
+              <p className="text-xs text-slate-400">avg/day</p>
+            </div>
+          </div>
+        </div>
+      </div>
+
       {/* Stats Row */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
         <StatsCard
@@ -140,8 +344,8 @@ export default function DashboardPage() {
           className="animate-fade-in-up stagger-1"
         />
         <StatsCard
-          label={`Total (${range}d)`}
-          value={rangeEggs.length}
+          label="All Time"
+          value={eggs.length}
           icon={<TrendingUp className="w-5 h-5" />}
           className="animate-fade-in-up stagger-2"
         />
@@ -152,26 +356,21 @@ export default function DashboardPage() {
           className="animate-fade-in-up stagger-3"
         />
         <StatsCard
-          label="Avg / Day"
-          value={avgPerDay}
+          label="Top Size"
+          value={dominantSize ? `${dominantSize[0]} (${dominantSize[1]})` : "—"}
           icon={<BarChart3 className="w-5 h-5" />}
           className="animate-fade-in-up stagger-4"
         />
       </div>
 
-      {/* Charts Row */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+      {/* Charts — based on selected month */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         <div className="animate-fade-in-up stagger-1">
           <ProductionChart data={dailyCounts} />
         </div>
         <div className="animate-fade-in-up stagger-2">
           <SizeDistChart data={sizeCounts} />
         </div>
-      </div>
-
-      {/* Date Comparison */}
-      <div className="animate-fade-in-up stagger-3">
-        <DateCompChart eggs={rangeEggs} />
       </div>
     </div>
   );
